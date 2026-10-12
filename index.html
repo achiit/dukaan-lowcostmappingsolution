@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Low Cost Mapping Solution for Mobile Robot</title>
+<style>
+  :root {
+    --bg: #12141a;
+    --panel: #1a1d26;
+    --panel-alt: #20242e;
+    --panel-border: #2e3340;
+    --accent: #00c8b4;
+    --accent-dim: #008276;
+    --text: #e1e5eb;
+    --text-dim: #8c94a0;
+    --text-faint: #5a606c;
+    --success: #3cc878;
+    --danger: #e65050;
+    --warning: #f0b43c;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    overflow: hidden;
+  }
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: 1px solid var(--panel-border);
+    background: #282d38;
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    transition: background 0.12s ease;
+  }
+  button:hover { background: #363c48; }
+  button.accent { background: var(--accent-dim); color: #06110f; font-weight: 600; border-color: var(--accent-dim); }
+  button.accent:hover { background: var(--accent); }
+  button.full { width: 100%; }
+  button.tiny { font-size: 11px; padding: 6px 8px; color: var(--text-faint); background: transparent; }
+  select {
+    font-family: inherit; background: #14161c; color: var(--text);
+    border: 1px solid var(--panel-border); border-radius: 6px; padding: 7px 8px; font-size: 13px;
+  }
+
+  /* ---------------- Mode select screen ---------------- */
+  #modeSelect {
+    height: 100%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px; text-align: center;
+    padding: 20px;
+  }
+  #modeSelect h1 { font-size: 30px; margin: 0; letter-spacing: 1px; }
+  #modeSelect h2 { font-size: 16px; margin: 0; color: var(--accent); font-weight: 500; letter-spacing: 3px; }
+  #modeSelect .prompt { color: var(--text-dim); margin: 18px 0 6px; }
+  .mode-buttons { display: flex; gap: 20px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+  .mode-buttons button { width: 240px; height: 60px; font-size: 15px; font-weight: 600; letter-spacing: 0.5px; }
+  #modeSelect .hint { color: var(--text-faint); font-size: 12px; max-width: 560px; margin-top: 28px; }
+
+  /* ---------------- Dashboard layout ---------------- */
+  #dashboard {
+    display: none;
+    height: 100%;
+    grid-template-columns: 300px 1fr;
+    grid-template-rows: 56px 1fr 150px;
+    grid-template-areas:
+      "top  top"
+      "left canvas"
+      "left bottom";
+  }
+  #topbar {
+    grid-area: top;
+    background: var(--panel);
+    border-bottom: 1px solid var(--panel-border);
+    display: flex; align-items: center; gap: 16px; padding: 0 20px;
+  }
+  #topbar .title { font-weight: 700; font-size: 16px; letter-spacing: 0.5px; white-space: nowrap; }
+  .pill {
+    padding: 5px 12px; border-radius: 14px; font-size: 12px; font-weight: 600;
+    background: var(--panel-alt); white-space: nowrap;
+  }
+  .pill-on { color: var(--success); }
+  .pill-off { color: var(--danger); }
+  #topbar .spacer { flex: 1; }
+  #clock { font-variant-numeric: tabular-nums; }
+  #modeLabel { color: var(--accent); font-size: 11px; letter-spacing: 1px; font-weight: 600; }
+
+  #leftPanel {
+    grid-area: left;
+    min-height: 0; min-width: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--panel-border);
+    padding: 16px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .section-title {
+    text-transform: uppercase; font-size: 11px; letter-spacing: 1px;
+    color: var(--accent); font-weight: 700; margin: 14px 0 8px;
+  }
+  .section-title:first-child { margin-top: 0; }
+  .small-label { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; display: block; }
+  .btn-row { display: flex; gap: 8px; margin-top: 8px; }
+  .btn-row button { flex: 1; }
+  .status-pill {
+    margin-top: 10px; padding: 6px 10px; border-radius: 10px; font-size: 12px;
+    background: var(--panel-alt); text-align: center; font-weight: 600;
+  }
+  #portLabel { font-size: 11px; color: var(--text-faint); margin-top: 6px; }
+  #webSerialWarning {
+    display: none; font-size: 11px; color: var(--warning); background: rgba(240,180,60,0.1);
+    border: 1px solid rgba(240,180,60,0.3); border-radius: 6px; padding: 8px; margin-top: 8px;
+  }
+  #statusMsg {
+    margin-top: auto; font-size: 11px; padding: 8px; border-radius: 6px;
+    background: rgba(0,0,0,0.25); min-height: 14px; transition: opacity 0.4s ease;
+  }
+
+  #mapCanvas {
+    grid-area: canvas; width: 100%; height: 100%; display: block; cursor: grab;
+    min-width: 0; min-height: 0; /* prevent a canvas's intrinsic size from inflating its grid track */
+  }
+  #mapCanvas:active { cursor: grabbing; }
+
+  #bottomPanel {
+    grid-area: bottom; min-height: 0; min-width: 0;
+    background: var(--panel); border-top: 1px solid var(--panel-border);
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 12px 16px;
+    overflow: hidden;
+  }
+  #bottomPanel .kv { font-family: "Consolas", monospace; font-size: 13px; line-height: 1.6; color: var(--text); }
+  #bottomPanel .col { min-width: 0; }
+</style>
+</head>
+<body>
+
+<div id="modeSelect">
+  <h1>LOW COST MAPPING SOLUTION</h1>
+  <h2>FOR MOBILE ROBOT</h2>
+  <p class="prompt">Select a mode to begin</p>
+  <div class="mode-buttons">
+    <button id="btnRealMode">REAL SENSOR MODE</button>
+    <button id="btnDemoMode" class="accent">DEMO MODE</button>
+  </div>
+  <p class="hint">Real Sensor Mode reads live ultrasonic data over USB using the Web Serial API
+    (Chrome / Edge, served over HTTPS or from a local file). Demo Mode is fully simulated and
+    needs no hardware at all.</p>
+</div>
+
+<div id="dashboard">
+  <div id="topbar">
+    <div class="title">LOW COST MAPPING SOLUTION FOR MOBILE ROBOT</div>
+    <div class="pill pill-off" id="connPill">● DISCONNECTED</div>
+    <div class="pill pill-off" id="mapPill">IDLE</div>
+    <div class="spacer"></div>
+    <div id="modeLabel">DEMO MODE</div>
+    <div id="clock">00:00:00</div>
+  </div>
+
+  <div id="leftPanel">
+    <div class="section-title">Serial Connection</div>
+    <button id="btnSelectPort" class="full">SELECT COM PORT</button>
+    <div id="portLabel">No port selected</div>
+    <span class="small-label" style="margin-top:8px;">BAUD RATE</span>
+    <select id="baudSelect" class="full"></select>
+    <div class="btn-row">
+      <button id="btnConnect">CONNECT</button>
+      <button id="btnDisconnect">DISCONNECT</button>
+      <button id="btnRefresh">REFRESH</button>
+    </div>
+    <div class="status-pill pill-off" id="serialStatusPill">● DISCONNECTED</div>
+    <div id="webSerialWarning">
+      Web Serial API is not available in this browser. Real Sensor Mode needs
+      Chrome or Edge. Demo Mode works everywhere.
+    </div>
+
+    <div class="section-title">Mapping Controls</div>
+    <button id="btnStartMapping" class="accent full">START MAPPING</button>
+    <div class="btn-row">
+      <button id="btnClearMap">CLEAR MAP</button>
+      <button id="btnSaveMap">SAVE MAP</button>
+    </div>
+    <div class="btn-row">
+      <button id="btnLoadMap">LOAD MAP</button>
+      <button id="btnResetRobot">RESET ROBOT</button>
+    </div>
+    <input type="file" id="loadFileInput" accept=".csv" style="display:none">
+
+    <button id="btnBack" class="tiny full" style="margin-top:14px;">&lt; BACK TO MODE SELECT</button>
+
+    <div id="statusMsg"></div>
+  </div>
+
+  <canvas id="mapCanvas"></canvas>
+
+  <div id="bottomPanel">
+    <div class="col">
+      <div class="section-title">Sensor Data</div>
+      <div class="kv" id="sensorData"></div>
+    </div>
+    <div class="col">
+      <div class="section-title">Robot Position</div>
+      <div class="kv" id="robotPos"></div>
+    </div>
+    <div class="col">
+      <div class="section-title">Mapping Statistics</div>
+      <div class="kv" id="mapStats"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===========================================================
+   core.js - shared logic, framework-free, testable in Node.
+   This file's contents get embedded verbatim inside <script>
+   in the final HTML deliverable.
+   =========================================================== */
+
+// ---------------------------------------------------------------
+// CONFIG
+// ---------------------------------------------------------------
+const CONFIG = {
+  MIN_VALID_DISTANCE_CM: 2.0,
+  MAX_VALID_DISTANCE_CM: 400.0,
+  DEFAULT_SENSOR_ANGLE_DEG: 0.0,
+  DUPLICATE_POINT_RADIUS_CM: 2.5,
+  OUTLIER_JUMP_THRESHOLD_CM: 120.0,
+  MOVING_AVERAGE_WINDOW: 3,
+  MAX_STORED_POINTS: 20000,
+
+  DEFAULT_PIXELS_PER_CM: 2.2,
+  MIN_PIXELS_PER_CM: 0.3,
+  MAX_PIXELS_PER_CM: 12.0,
+  ZOOM_STEP: 1.12,
+  GRID_SPACING_CM: 25,
+  SCALE_BAR_TARGETS_CM: [10, 50, 100, 200, 500],
+
+  DEMO_WORLD_WIDTH_CM: 500,
+  DEMO_WORLD_HEIGHT_CM: 400,
+  DEMO_ROBOT_SPEED_CM_S: 40.0,
+  DEMO_ROBOT_TURN_DEG_S: 60.0,
+  DEMO_SENSOR_NOISE_CM: 1.5,
+  DEMO_SENSOR_MAX_RANGE_CM: 300.0,
+  DEMO_SCAN_STEP_DEG: 6.0,
+
+  BAUD_RATES: [9600, 19200, 38400, 57600, 115200],
+  DEFAULT_BAUD_RATE: 9600,
+};
+
+// ---------------------------------------------------------------
+// DATA PARSER
+// Supported formats:
+//   "100"                          -> {distance:100}
+//   "100,30"                       -> {distance:100, angle:30}
+//   "DISTANCE:100,ANGLE:30"        -> {distance:100, angle:30}
+//   "X:120,Y:50,A:30,D:100"        -> {x:120,y:50,angle:30,distance:100}
+// ---------------------------------------------------------------
+const KEY_ALIASES = {
+  d: "distance", dist: "distance", distance: "distance",
+  a: "angle", ang: "angle", angle: "angle",
+  x: "x", y: "y",
+  h: "heading", heading: "heading", hdg: "heading",
+};
+
+function toFloatStrict(token) {
+  token = token.trim();
+  if (!/^-?\d+(\.\d+)?$/.test(token)) return null;
+  const v = parseFloat(token);
+  return Number.isNaN(v) ? null : v;
+}
+
+function parseLine(rawLine) {
+  if (rawLine == null) return null;
+  let line = String(rawLine).trim();
+  if (!line) return null;
+
+  // strip non-printable chars
+  line = Array.from(line).filter((ch) => {
+    const code = ch.codePointAt(0);
+    return code >= 32 && code !== 127;
+  }).join("");
+  if (!line) return null;
+
+  if (line.includes(":")) {
+    const result = {};
+    const parts = line.split(",").map((p) => p.trim()).filter((p) => p.length);
+    let allOk = true;
+    for (const part of parts) {
+      if (!part.includes(":")) { allOk = false; break; }
+      const idx = part.indexOf(":");
+      const key = part.slice(0, idx).trim().toLowerCase();
+      const value = part.slice(idx + 1);
+      const normKey = KEY_ALIASES[key];
+      const num = toFloatStrict(value);
+      if (normKey == null || num == null) { allOk = false; break; }
+      result[normKey] = num;
+    }
+    if (allOk && Object.keys(result).length) return result;
+    return null;
+  }
+
+  const parts = line.split(",").map((p) => p.trim()).filter((p) => p !== "");
+  if (parts.length === 1) {
+    const num = toFloatStrict(parts[0]);
+    if (num == null) return null;
+    return { distance: num };
+  }
+  if (parts.length === 2) {
+    const d = toFloatStrict(parts[0]);
+    const a = toFloatStrict(parts[1]);
+    if (d == null || a == null) return null;
+    return { distance: d, angle: a };
+  }
+  return null;
+}
+
+function isMeasurementValid(m, minD, maxD) {
+  if (!m) return false;
+  if (!("distance" in m)) return false;
+  const d = m.distance;
+  if (d == null) return false;
+  if (d <= 0) return false;
+  if (d < minD || d > maxD) return false;
+  return true;
+}
+
+// ---------------------------------------------------------------
+// ROBOT
+// ---------------------------------------------------------------
+class Robot {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.x = 0.0;
+    this.y = 0.0;
+    this.angle = 0.0;
+    this.trail = [[0, 0]];
+    this._lastTrailPoint = [0, 0];
+    this._trailMinSpacing = 3.0;
+    this.startTime = Date.now();
+  }
+  setPose(x, y, angle) {
+    if (x !== undefined && x !== null) this.x = x;
+    if (y !== undefined && y !== null) this.y = y;
+    if (angle !== undefined && angle !== null) this.angle = ((angle % 360) + 360) % 360;
+    this._maybeRecordTrail();
+  }
+  moveForward(distanceCm) {
+    const rad = (this.angle * Math.PI) / 180;
+    this.x += distanceCm * Math.cos(rad);
+    this.y += distanceCm * Math.sin(rad);
+    this._maybeRecordTrail();
+  }
+  turn(deltaDeg) {
+    this.angle = ((this.angle + deltaDeg) % 360 + 360) % 360;
+  }
+  _maybeRecordTrail() {
+    const [lx, ly] = this._lastTrailPoint;
+    const dist = Math.hypot(this.x - lx, this.y - ly);
+    if (dist >= this._trailMinSpacing) {
+      this.trail.push([this.x, this.y]);
+      this._lastTrailPoint = [this.x, this.y];
+      if (this.trail.length > 5000) this.trail = this.trail.slice(-4000);
+    }
+  }
+  elapsedTimeStr() {
+    const total = Math.floor((Date.now() - this.startTime) / 1000);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+}
+
+// ---------------------------------------------------------------
+// MAP DATA
+// ---------------------------------------------------------------
+class MapData {
+  constructor() {
+    this.clear();
+  }
+  clear() {
+    this.points = []; // [x, y, ts]
+    this._pointIndex = new Map();
+    this._cellSize = Math.max(CONFIG.DUPLICATE_POINT_RADIUS_CM, 1.0);
+    this.totalMeasurements = 0;
+    this.validMeasurements = 0;
+    this.rejectedMeasurements = 0;
+    this._distanceHistory = [];
+    this._lastAcceptedDistance = null;
+    this.mappingStartTime = null;
+    this.mappingActive = false;
+  }
+  start() {
+    if (this.mappingStartTime == null) this.mappingStartTime = Date.now();
+    this.mappingActive = true;
+  }
+  pause() {
+    this.mappingActive = false;
+  }
+  _smoothedDistance(distance) {
+    this._distanceHistory.push(distance);
+    if (this._distanceHistory.length > CONFIG.MOVING_AVERAGE_WINDOW) this._distanceHistory.shift();
+    return this._distanceHistory.reduce((a, b) => a + b, 0) / this._distanceHistory.length;
+  }
+  _cellKey(cx, cy) {
+    return `${cx}_${cy}`;
+  }
+  _isDuplicate(x, y) {
+    const cx = Math.floor(x / this._cellSize);
+    const cy = Math.floor(y / this._cellSize);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const key = this._cellKey(cx + dx, cy + dy);
+        const idxs = this._pointIndex.get(key);
+        if (!idxs) continue;
+        for (const idx of idxs) {
+          const [px, py] = this.points[idx];
+          if (Math.hypot(px - x, py - y) < CONFIG.DUPLICATE_POINT_RADIUS_CM) return true;
+        }
+      }
+    }
+    return false;
+  }
+  _indexPoint(x, y, idx) {
+    const cx = Math.floor(x / this._cellSize);
+    const cy = Math.floor(y / this._cellSize);
+    const key = this._cellKey(cx, cy);
+    if (!this._pointIndex.has(key)) this._pointIndex.set(key, []);
+    this._pointIndex.get(key).push(idx);
+  }
+  addMeasurement(distance, angleDeg, robotX, robotY, robotHeadingDeg) {
+    this.totalMeasurements += 1;
+    if (distance == null || distance <= 0) { this.rejectedMeasurements += 1; return false; }
+    if (distance < CONFIG.MIN_VALID_DISTANCE_CM || distance > CONFIG.MAX_VALID_DISTANCE_CM) {
+      this.rejectedMeasurements += 1;
+      return false;
+    }
+    if (this._lastAcceptedDistance != null) {
+      if (Math.abs(distance - this._lastAcceptedDistance) > CONFIG.OUTLIER_JUMP_THRESHOLD_CM) {
+        distance = (distance + this._lastAcceptedDistance) / 2.0;
+      }
+    }
+    const smoothed = this._smoothedDistance(distance);
+    this._lastAcceptedDistance = smoothed;
+
+    const totalAngleDeg = robotHeadingDeg + angleDeg;
+    const rad = (totalAngleDeg * Math.PI) / 180;
+    const localX = smoothed * Math.cos(rad);
+    const localY = smoothed * Math.sin(rad);
+    const globalX = robotX + localX;
+    const globalY = robotY + localY;
+
+    this.validMeasurements += 1;
+
+    if (this._isDuplicate(globalX, globalY)) return false;
+
+    if (this.points.length >= CONFIG.MAX_STORED_POINTS) {
+      this.points.shift();
+      this._pointIndex = new Map();
+      this.points.forEach((p, i) => this._indexPoint(p[0], p[1], i));
+    }
+
+    const idx = this.points.length;
+    this.points.push([globalX, globalY, Date.now()]);
+    this._indexPoint(globalX, globalY, idx);
+    return true;
+  }
+  mappingTimeStr() {
+    if (this.mappingStartTime == null) return "00:00";
+    const total = Math.floor((Date.now() - this.mappingStartTime) / 1000);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  mapBounds() {
+    if (!this.points.length) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [x, y] of this.points) {
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+    return [minX, minY, maxX, maxY];
+  }
+  mapSizeStr() {
+    const b = this.mapBounds();
+    if (!b) return "0 x 0 cm";
+    const [minX, minY, maxX, maxY] = b;
+    return `${(maxX - minX).toFixed(0)} x ${(maxY - minY).toFixed(0)} cm`;
+  }
+  toCsv() {
+    let out = "x,y\r\n";
+    for (const [x, y] of this.points) out += `${x.toFixed(2)},${y.toFixed(2)}\r\n`;
+    return out;
+  }
+  loadCsv(text) {
+    this.clear();
+    const lines = text.split(/\r?\n/);
+    let start = 0;
+    if (lines.length && lines[0].trim().toLowerCase().startsWith("x")) start = 1;
+    for (let i = start; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const parts = line.split(",");
+      if (parts.length < 2) continue;
+      const x = parseFloat(parts[0]);
+      const y = parseFloat(parts[1]);
+      if (Number.isNaN(x) || Number.isNaN(y)) continue;
+      const idx = this.points.length;
+      this.points.push([x, y, Date.now()]);
+      this._indexPoint(x, y, idx);
+    }
+    this.mappingStartTime = Date.now();
+    return this.points.length;
+  }
+}
+
+// ---------------------------------------------------------------
+// DEMO ENVIRONMENT (simulated world + robot patrol + raycasting)
+// ---------------------------------------------------------------
+function raySegmentIntersection(ox, oy, dx, dy, seg) {
+  const [x1, y1, x2, y2] = seg;
+  const sx = x2 - x1, sy = y2 - y1;
+  const denom = dx * sy - dy * sx;
+  if (Math.abs(denom) < 1e-9) return null;
+  const t = ((x1 - ox) * sy - (y1 - oy) * sx) / denom;
+  if (t < 0) return null;
+  let u;
+  if (sx !== 0) u = (ox + t * dx - x1) / sx;
+  else u = (oy + t * dy - y1) / sy;
+  if (u < 0 || u > 1) return null;
+  return t;
+}
+
+function buildDemoWorld() {
+  const w = CONFIG.DEMO_WORLD_WIDTH_CM;
+  const h = CONFIG.DEMO_WORLD_HEIGHT_CM;
+  const hw = w / 2, hh = h / 2;
+  const segs = [];
+  const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
+  for (let i = 0; i < 4; i++) {
+    const [x1, y1] = corners[i];
+    const [x2, y2] = corners[(i + 1) % 4];
+    segs.push([x1, y1, x2, y2]);
+  }
+  // box 1
+  {
+    const bx = -hw * 0.3, by = -hh * 0.35, bs = 40;
+    const box = [[bx, by], [bx + bs, by], [bx + bs, by + bs], [bx, by + bs]];
+    for (let i = 0; i < 4; i++) {
+      const [x1, y1] = box[i];
+      const [x2, y2] = box[(i + 1) % 4];
+      segs.push([x1, y1, x2, y2]);
+    }
+  }
+  // box 2
+  {
+    const bx = hw * 0.25, by = hh * 0.15, bs = 60;
+    const box = [[bx, by], [bx + bs, by], [bx + bs, by + bs], [bx, by + bs]];
+    for (let i = 0; i < 4; i++) {
+      const [x1, y1] = box[i];
+      const [x2, y2] = box[(i + 1) % 4];
+      segs.push([x1, y1, x2, y2]);
+    }
+  }
+  // corridor divider with gap
+  segs.push([-20, -hh, -20, -20]);
+  segs.push([-20, 20, -20, hh]);
+  return segs;
+}
+
+class DemoEnvironment {
+  constructor() {
+    this.segments = buildDemoWorld();
+    this.robotX = 0;
+    this.robotY = 0;
+    this.robotHeading = 0;
+    this._scanAngle = -60;
+    this._scanDir = 1;
+    this._turnCooldown = 0;
+    this._forwardSpeed = CONFIG.DEMO_ROBOT_SPEED_CM_S;
+    this._seed = 42;
+  }
+  _rand() {
+    // simple deterministic PRNG (mulberry32-ish) for reproducibility
+    this._seed |= 0;
+    this._seed = (this._seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(this._seed ^ (this._seed >>> 15), 1 | this._seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  reset(x = 0, y = 0, heading = 0) {
+    this.robotX = x;
+    this.robotY = y;
+    this.robotHeading = heading;
+    this._scanAngle = -60;
+    this._scanDir = 1;
+    this._turnCooldown = 0;
+  }
+  _distanceToNearestWall(x, y, absAngleDeg) {
+    const rad = (absAngleDeg * Math.PI) / 180;
+    const dx = Math.cos(rad), dy = Math.sin(rad);
+    let best = null;
+    for (const seg of this.segments) {
+      const t = raySegmentIntersection(x, y, dx, dy, seg);
+      if (t != null && (best == null || t < best)) best = t;
+    }
+    return best;
+  }
+  _wouldCollide(x, y, margin = 15.0) {
+    const dist = this._distanceToNearestWall(x, y, this.robotHeading);
+    return dist != null && dist < margin;
+  }
+  step(dt) {
+    if (this._turnCooldown > 0) {
+      this.robotHeading = ((this.robotHeading + CONFIG.DEMO_ROBOT_TURN_DEG_S * dt) % 360 + 360) % 360;
+      this._turnCooldown -= dt;
+    } else if (this._wouldCollide(this.robotX, this.robotY)) {
+      this._turnCooldown = 0.8 + this._rand() * 0.6;
+    } else {
+      const step = this._forwardSpeed * dt;
+      const rad = (this.robotHeading * Math.PI) / 180;
+      this.robotX += step * Math.cos(rad);
+      this.robotY += step * Math.sin(rad);
+    }
+    this._scanAngle += this._scanDir * CONFIG.DEMO_SCAN_STEP_DEG;
+    if (this._scanAngle >= 60) { this._scanAngle = 60; this._scanDir = -1; }
+    else if (this._scanAngle <= -60) { this._scanAngle = -60; this._scanDir = 1; }
+  }
+  getMeasurement() {
+    const absAngle = this.robotHeading + this._scanAngle;
+    const dist = this._distanceToNearestWall(this.robotX, this.robotY, absAngle);
+    if (dist == null || dist > CONFIG.DEMO_SENSOR_MAX_RANGE_CM) return [null, this._scanAngle];
+    const noise = (this._rand() * 2 - 1) * CONFIG.DEMO_SENSOR_NOISE_CM;
+    const noisy = Math.max(CONFIG.MIN_VALID_DISTANCE_CM, dist + noise);
+    return [noisy, this._scanAngle];
+  }
+  getPose() {
+    return [this.robotX, this.robotY, this.robotHeading];
+  }
+}
+
+// ---------------------------------------------------------------
+// CAMERA (world <-> screen transform, pan & zoom)
+// ---------------------------------------------------------------
+class Camera {
+  constructor(viewport) {
+    this.viewport = viewport; // {x,y,w,h}
+    this.pixelsPerCm = CONFIG.DEFAULT_PIXELS_PER_CM;
+    this.offsetX = 0;
+    this.offsetY = 0;
+    this.dragging = false;
+    this._dragStartMouse = [0, 0];
+    this._dragStartOffset = [0, 0];
+  }
+  setViewport(vp) { this.viewport = vp; }
+  worldToScreen(wx, wy) {
+    const { x: vx, y: vy, w: vw, h: vh } = this.viewport;
+    const cx = vx + vw / 2, cy = vy + vh / 2;
+    const sx = cx + (wx - this.offsetX) * this.pixelsPerCm;
+    const sy = cy - (wy - this.offsetY) * this.pixelsPerCm;
+    return [sx, sy];
+  }
+  screenToWorld(sx, sy) {
+    const { x: vx, y: vy, w: vw, h: vh } = this.viewport;
+    const cx = vx + vw / 2, cy = vy + vh / 2;
+    const wx = this.offsetX + (sx - cx) / this.pixelsPerCm;
+    const wy = this.offsetY - (sy - cy) / this.pixelsPerCm;
+    return [wx, wy];
+  }
+  zoomAt(screenPos, zoomIn) {
+    const before = this.screenToWorld(...screenPos);
+    const factor = zoomIn ? CONFIG.ZOOM_STEP : 1 / CONFIG.ZOOM_STEP;
+    let newPpc = this.pixelsPerCm * factor;
+    newPpc = Math.max(CONFIG.MIN_PIXELS_PER_CM, Math.min(CONFIG.MAX_PIXELS_PER_CM, newPpc));
+    if (newPpc === this.pixelsPerCm) return;
+    this.pixelsPerCm = newPpc;
+    const after = this.screenToWorld(...screenPos);
+    this.offsetX += before[0] - after[0];
+    this.offsetY += before[1] - after[1];
+  }
+  startDrag(pos) {
+    this.dragging = true;
+    this._dragStartMouse = pos;
+    this._dragStartOffset = [this.offsetX, this.offsetY];
+  }
+  updateDrag(pos) {
+    if (!this.dragging) return;
+    const dxPx = pos[0] - this._dragStartMouse[0];
+    const dyPx = pos[1] - this._dragStartMouse[1];
+    this.offsetX = this._dragStartOffset[0] - dxPx / this.pixelsPerCm;
+    this.offsetY = this._dragStartOffset[1] + dyPx / this.pixelsPerCm;
+  }
+  endDrag() { this.dragging = false; }
+  reset() {
+    this.pixelsPerCm = CONFIG.DEFAULT_PIXELS_PER_CM;
+    this.offsetX = 0;
+    this.offsetY = 0;
+  }
+}
+
+// Export for Node testing; in the final HTML these classes/functions
+// are simply defined in global scope inside a <script> tag (no module
+// system needed there).
+/* ===========================================================
+   app.js - DOM / canvas / Web Serial glue around core.js.
+   Embedded verbatim into the final HTML's <script> tag.
+   =========================================================== */
+
+const COLORS = {
+  background: "#12141a",
+  panel: "#1a1d26",
+  panelAlt: "#20242e",
+  panelBorder: "#2e3340",
+  accent: "#00c8b4",
+  accentDim: "#008276",
+  accentSoft: "#284644",
+  text: "#e1e5eb",
+  textDim: "#8c94a0",
+  textFaint: "#5a606c",
+  success: "#3cc878",
+  danger: "#e65050",
+  warning: "#f0b43c",
+  grid: "#282d38",
+  gridMajor: "#383e4c",
+  obstacle: "#ff7859",
+  robot: "#00c8b4",
+  trail: "#008c82",
+  white: "#ffffff",
+  black: "#000000",
+};
+
+const STATE_MODE_SELECT = "mode_select";
+const STATE_DASHBOARD = "dashboard";
+
+class App {
+  constructor(doc) {
+    this.doc = doc;
+    this.state = STATE_MODE_SELECT;
+    this.mode = null; // "real" | "demo"
+    this.mappingActive = false;
+    this.statusMessage = "";
+    this.statusMessageColor = COLORS.textDim;
+    this.statusMessageTime = 0;
+
+    this.mapData = new MapData();
+    this.robot = new Robot();
+    this.demoEnv = new DemoEnvironment();
+
+    this.lastDistance = null;
+    this.lastAngle = null;
+    this.configuredAngle = CONFIG.DEFAULT_SENSOR_ANGLE_DEG;
+
+    this.selectedPort = null;
+    this.serialConnected = false;
+    this.serialLineQueue = [];
+    this._serialReader = null;
+    this._serialReadableClosed = null;
+    this.serialError = null;
+
+    this._bindDom();
+    this._buildBaudOptions();
+    this.camera = new Camera({ x: 0, y: 0, w: this.canvas.width, h: this.canvas.height });
+    this._resizeCanvas();
+    window.addEventListener("resize", () => this._resizeCanvas());
+
+    this._bindEvents();
+    this._checkWebSerialSupport();
+
+    this._lastFrameTime = performance.now();
+    requestAnimationFrame((t) => this._loop(t));
+  }
+
+  _bindDom() {
+    const d = this.doc;
+    this.modeSelectEl = d.getElementById("modeSelect");
+    this.dashboardEl = d.getElementById("dashboard");
+    this.btnRealMode = d.getElementById("btnRealMode");
+    this.btnDemoMode = d.getElementById("btnDemoMode");
+
+    this.canvas = d.getElementById("mapCanvas");
+    this.ctx = this.canvas.getContext("2d");
+
+    this.connPill = d.getElementById("connPill");
+    this.mapPill = d.getElementById("mapPill");
+    this.clockEl = d.getElementById("clock");
+    this.modeLabelEl = d.getElementById("modeLabel");
+
+    this.btnSelectPort = d.getElementById("btnSelectPort");
+    this.baudSelect = d.getElementById("baudSelect");
+    this.btnConnect = d.getElementById("btnConnect");
+    this.btnDisconnect = d.getElementById("btnDisconnect");
+    this.btnRefresh = d.getElementById("btnRefresh");
+    this.serialStatusPill = d.getElementById("serialStatusPill");
+    this.portLabel = d.getElementById("portLabel");
+
+    this.btnStartMapping = d.getElementById("btnStartMapping");
+    this.btnClearMap = d.getElementById("btnClearMap");
+    this.btnSaveMap = d.getElementById("btnSaveMap");
+    this.btnLoadMap = d.getElementById("btnLoadMap");
+    this.btnResetRobot = d.getElementById("btnResetRobot");
+    this.loadFileInput = d.getElementById("loadFileInput");
+    this.btnBack = d.getElementById("btnBack");
+    this.statusMsgEl = d.getElementById("statusMsg");
+
+    this.sensorDataEl = d.getElementById("sensorData");
+    this.robotPosEl = d.getElementById("robotPos");
+    this.mapStatsEl = d.getElementById("mapStats");
+
+    this.webSerialWarning = d.getElementById("webSerialWarning");
+  }
+
+  _buildBaudOptions() {
+    this.baudSelect.innerHTML = "";
+    for (const rate of CONFIG.BAUD_RATES) {
+      const opt = this.doc.createElement("option");
+      opt.value = String(rate);
+      opt.textContent = String(rate);
+      if (rate === CONFIG.DEFAULT_BAUD_RATE) opt.selected = true;
+      this.baudSelect.appendChild(opt);
+    }
+  }
+
+  _checkWebSerialSupport() {
+    this.webSerialSupported = typeof navigator !== "undefined" && "serial" in navigator;
+    if (!this.webSerialSupported && this.webSerialWarning) {
+      this.webSerialWarning.style.display = "block";
+    }
+  }
+
+  _resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = this.canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.floor(rect.width));
+    const h = Math.max(1, Math.floor(rect.height));
+    this.canvas.width = Math.floor(w * dpr);
+    this.canvas.height = Math.floor(h * dpr);
+    this._dpr = dpr;
+    this._logicalW = w;
+    this._logicalH = h;
+    if (this.camera) this.camera.setViewport({ x: 0, y: 0, w, h });
+  }
+
+  _bindEvents() {
+    this.btnRealMode.addEventListener("click", () => this._selectMode("real"));
+    this.btnDemoMode.addEventListener("click", () => this._selectMode("demo"));
+
+    this.btnSelectPort.addEventListener("click", () => this._selectSerialPort());
+    this.btnConnect.addEventListener("click", () => this._onConnectClicked());
+    this.btnDisconnect.addEventListener("click", () => this._onDisconnectClicked());
+    this.btnRefresh.addEventListener("click", () => this._refreshPorts());
+
+    this.btnStartMapping.addEventListener("click", () => this._toggleMapping());
+    this.btnClearMap.addEventListener("click", () => this._clearMap());
+    this.btnSaveMap.addEventListener("click", () => this._saveMap());
+    this.btnLoadMap.addEventListener("click", () => this.loadFileInput.click());
+    this.loadFileInput.addEventListener("change", (e) => this._handleLoadFile(e));
+    this.btnResetRobot.addEventListener("click", () => this._resetRobot());
+    this.btnBack.addEventListener("click", () => this._backToModeSelect());
+
+    this.doc.addEventListener("keydown", (e) => this._handleKeydown(e));
+
+    this.canvas.addEventListener("wheel", (e) => this._handleWheel(e), { passive: false });
+    this.canvas.addEventListener("mousedown", (e) => this._handleMouseDown(e));
+    window.addEventListener("mousemove", (e) => this._handleMouseMove(e));
+    window.addEventListener("mouseup", (e) => this._handleMouseUp(e));
+  }
+
+  // ==================================================================
+  // MODE SELECTION
+  // ==================================================================
+  _selectMode(mode) {
+    this.mode = mode;
+    this.mapData.clear();
+    this.robot.reset();
+    this.camera.reset();
+    this.mappingActive = false;
+    this.btnStartMapping.textContent = "START MAPPING";
+
+    if (mode === "demo") {
+      this.demoEnv.reset();
+      this._setStatus("Demo Mode ready. Click START MAPPING.", COLORS.success);
+    } else {
+      this._refreshPorts();
+      if (!this.webSerialSupported) {
+        this._setStatus("Web Serial not supported in this browser. Use Chrome/Edge.", COLORS.danger);
+      } else {
+        this._setStatus("Select a port and click CONNECT.", COLORS.textDim);
+      }
+    }
+
+    this.state = STATE_DASHBOARD;
+    this.modeSelectEl.style.display = "none";
+    this.dashboardEl.style.display = "grid";
+    this._resizeCanvas();
+  }
+
+  _backToModeSelect() {
+    this._toggleMapping(true);
+    if (this.serialConnected) this._disconnectSerial();
+    this.state = STATE_MODE_SELECT;
+    this.modeSelectEl.style.display = "flex";
+    this.dashboardEl.style.display = "none";
+  }
+
+  // ==================================================================
+  // SERIAL (Web Serial API) - Real Sensor Mode
+  // ==================================================================
+  async _selectSerialPort() {
+    if (!this.webSerialSupported) {
+      this._setStatus("Web Serial API is not available in this browser.", COLORS.danger);
+      return;
+    }
+    try {
+      const port = await navigator.serial.requestPort();
+      this.selectedPort = port;
+      this.portLabel.textContent = "Port selected (see browser permission list)";
+      this._setStatus("Port selected. Click CONNECT.", COLORS.textDim);
+    } catch (err) {
+      this._setStatus("No port selected.", COLORS.textDim);
+    }
+  }
+
+  async _refreshPorts() {
+    if (!this.webSerialSupported) return;
+    try {
+      const ports = await navigator.serial.getPorts();
+      if (ports.length && !this.selectedPort) {
+        this.selectedPort = ports[0];
+        this.portLabel.textContent = `${ports.length} previously authorized port(s) found`;
+      } else if (!ports.length) {
+        this.portLabel.textContent = "No authorized ports yet - click Select Port";
+      }
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  async _onConnectClicked() {
+    if (this.mode !== "real") {
+      this._setStatus("Switch to Real Sensor Mode to connect.", COLORS.warning);
+      return;
+    }
+    if (!this.webSerialSupported) {
+      this._setStatus("Web Serial API is not available in this browser.", COLORS.danger);
+      return;
+    }
+    if (!this.selectedPort) {
+      this._setStatus("Select a port first.", COLORS.warning);
+      return;
+    }
+    const baud = parseInt(this.baudSelect.value, 10) || CONFIG.DEFAULT_BAUD_RATE;
+    try {
+      await this.selectedPort.open({ baudRate: baud });
+      this.serialConnected = true;
+      this.serialError = null;
+      this._setStatus(`Connected @ ${baud} baud`, COLORS.success);
+      this._startSerialReadLoop();
+    } catch (err) {
+      this.serialConnected = false;
+      this._setStatus(`Could not open port: ${err.message}`, COLORS.danger);
+    }
+  }
+
+  async _onDisconnectClicked() {
+    await this._disconnectSerial();
+    this._setStatus("Disconnected.", COLORS.textDim);
+  }
+
+  async _disconnectSerial() {
+    this.serialConnected = false;
+    try {
+      if (this._serialReader) {
+        await this._serialReader.cancel().catch(() => {});
+      }
+      if (this._serialReadableClosed) {
+        await this._serialReadableClosed.catch(() => {});
+      }
+      if (this.selectedPort && this.selectedPort.readable) {
+        await this.selectedPort.close().catch(() => {});
+      }
+    } catch (err) {
+      // best-effort cleanup only
+    }
+    this._serialReader = null;
+    this._serialReadableClosed = null;
+  }
+
+  async _startSerialReadLoop() {
+    const textDecoder = new TextDecoderStream();
+    this._serialReadableClosed = this.selectedPort.readable.pipeTo(textDecoder.writable);
+    const reader = textDecoder.readable.getReader();
+    this._serialReader = reader;
+    let buffer = "";
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) {
+          buffer += value;
+          let idx;
+          while ((idx = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, idx).replace(/\r$/, "");
+            buffer = buffer.slice(idx + 1);
+            if (line) this.serialLineQueue.push(line);
+          }
+        }
+      }
+    } catch (err) {
+      this.serialError = `Device disconnected: ${err.message}`;
+      this.serialConnected = false;
+    } finally {
+      try { reader.releaseLock(); } catch (e) { /* ignore */ }
+    }
+  }
+
+  // ==================================================================
+  // BUTTON CALLBACKS
+  // ==================================================================
+  _toggleMapping(forceOff = false) {
+    if (forceOff) {
+      this.mappingActive = false;
+      this.mapData.pause();
+      this.btnStartMapping.textContent = "START MAPPING";
+      return;
+    }
+    this.mappingActive = !this.mappingActive;
+    if (this.mappingActive) {
+      if (this.mode === "real" && !this.serialConnected) {
+        this._setStatus("Connect to a serial device first.", COLORS.warning);
+        this.mappingActive = false;
+        return;
+      }
+      this.mapData.start();
+      this.btnStartMapping.textContent = "PAUSE MAPPING";
+      this._setStatus("Mapping started.", COLORS.success);
+    } else {
+      this.mapData.pause();
+      this.btnStartMapping.textContent = "START MAPPING";
+      this._setStatus("Mapping paused.", COLORS.textDim);
+    }
+  }
+
+  _clearMap() {
+    this.mapData.clear();
+    this.robot.reset();
+    this._setStatus("Map cleared.", COLORS.textDim);
+  }
+
+  _saveMap() {
+    try {
+      const csv = this.mapData.toCsv();
+      const stamp = this._timestamp();
+      this._downloadText(`map_${stamp}.csv`, csv, "text/csv");
+      this._downloadCanvasPng(`map_${stamp}.png`);
+      this._setStatus(`Saved map_${stamp}.csv / .png`, COLORS.success);
+    } catch (err) {
+      this._setStatus(`Save failed: ${err.message}`, COLORS.danger);
+    }
+  }
+
+  _timestamp() {
+    const d = new Date();
+    const pad = (n, len = 2) => String(n).padStart(len, "0");
+    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_${pad(d.getMilliseconds(), 3)}`;
+  }
+
+  _downloadText(filename, text, mime) {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = this.doc.createElement("a");
+    a.href = url;
+    a.download = filename;
+    this.doc.body.appendChild(a);
+    a.click();
+    this.doc.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  _downloadCanvasPng(filename) {
+    this.canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = this.doc.createElement("a");
+      a.href = url;
+      a.download = filename;
+      this.doc.body.appendChild(a);
+      a.click();
+      this.doc.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }, "image/png");
+  }
+
+  _handleLoadFile(evt) {
+    const file = evt.target.files && evt.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const count = this.mapData.loadCsv(String(reader.result));
+        this._setStatus(`Loaded ${count} points from ${file.name}`, COLORS.success);
+      } catch (err) {
+        this._setStatus(`Load failed: ${err.message}`, COLORS.danger);
+      }
+    };
+    reader.onerror = () => this._setStatus("Load failed: could not read file.", COLORS.danger);
+    reader.readAsText(file);
+    evt.target.value = "";
+  }
+
+  _resetRobot() {
+    this.robot.reset();
+    if (this.mode === "demo") this.demoEnv.reset();
+    this._setStatus("Robot position reset.", COLORS.textDim);
+  }
+
+  _setStatus(message, color) {
+    this.statusMessage = message;
+    this.statusMessageColor = color || COLORS.textDim;
+    this.statusMessageTime = performance.now();
+    if (this.statusMsgEl) {
+      this.statusMsgEl.textContent = message;
+      this.statusMsgEl.style.color = this.statusMessageColor;
+      this.statusMsgEl.style.opacity = "1";
+    }
+  }
+
+  // ==================================================================
+  // DATA INGESTION
+  // ==================================================================
+  _processMeasurement(measurement) {
+    if (!measurement) return;
+    const { x, y, heading, distance } = measurement;
+    if (x !== undefined || y !== undefined || heading !== undefined) {
+      this.robot.setPose(x, y, heading);
+    }
+    if (distance === undefined) return;
+    const angle = measurement.angle !== undefined ? measurement.angle : this.configuredAngle;
+
+    this.lastDistance = distance;
+    this.lastAngle = angle;
+
+    if (!this.mappingActive) return;
+    this.mapData.addMeasurement(distance, angle, this.robot.x, this.robot.y, this.robot.angle);
+  }
+
+  _pumpRealSerial() {
+    if (!this.serialConnected) {
+      if (this.serialError) {
+        this._setStatus(this.serialError, COLORS.danger);
+        this.serialError = null;
+      }
+      return;
+    }
+    const lines = this.serialLineQueue.splice(0, 200);
+    for (const line of lines) {
+      const measurement = parseLine(line);
+      if (measurement == null) {
+        this.mapData.rejectedMeasurements += 1;
+        continue;
+      }
+      this._processMeasurement(measurement);
+    }
+  }
+
+  _pumpDemo(dt) {
+    if (!this.mappingActive) return;
+    this.demoEnv.step(dt);
+    const [x, y, heading] = this.demoEnv.getPose();
+    this.robot.setPose(x, y, heading);
+
+    const [distance, relAngle] = this.demoEnv.getMeasurement();
+    if (distance == null) return;
+
+    this.lastDistance = distance;
+    this.lastAngle = relAngle;
+    this.mapData.addMeasurement(distance, relAngle, this.robot.x, this.robot.y, this.robot.angle);
+  }
+
+  // ==================================================================
+  // EVENT HANDLING
+  // ==================================================================
+  _handleKeydown(e) {
+    if (e.key === "F11") {
+      e.preventDefault();
+      this._toggleFullscreen();
+      return;
+    }
+    if (e.key === "Escape" && this.doc.fullscreenElement) {
+      this.doc.exitFullscreen().catch(() => {});
+      return;
+    }
+    if (this.state !== STATE_DASHBOARD) return;
+    // Avoid hijacking keys while the user is typing in a form field.
+    const tag = (e.target && e.target.tagName) || "";
+    if (tag === "SELECT" || tag === "INPUT" || tag === "TEXTAREA") return;
+
+    if (e.code === "Space") {
+      e.preventDefault();
+      this._toggleMapping();
+    } else if (e.key === "c" || e.key === "C") {
+      this._clearMap();
+    } else if (e.key === "s" || e.key === "S") {
+      this._saveMap();
+    } else if (e.key === "r" || e.key === "R") {
+      this._resetRobot();
+    }
+  }
+
+  _toggleFullscreen() {
+    if (!this.doc.fullscreenElement) {
+      this.doc.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      this.doc.exitFullscreen().catch(() => {});
+    }
+  }
+
+  _canvasPos(evt) {
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = this._logicalW / rect.width;
+    const scaleY = this._logicalH / rect.height;
+    return [(evt.clientX - rect.left) * scaleX, (evt.clientY - rect.top) * scaleY];
+  }
+
+  _handleWheel(e) {
+    if (this.state !== STATE_DASHBOARD) return;
+    e.preventDefault();
+    const pos = this._canvasPos(e);
+    this.camera.zoomAt(pos, e.deltaY < 0);
+  }
+
+  _handleMouseDown(e) {
+    if (this.state !== STATE_DASHBOARD) return;
+    if (e.button !== 0) return;
+    const pos = this._canvasPos(e);
+    this.camera.startDrag(pos);
+  }
+
+  _handleMouseMove(e) {
+    if (!this.camera || !this.camera.dragging) return;
+    const pos = this._canvasPos(e);
+    this.camera.updateDrag(pos);
+  }
+
+  _handleMouseUp(e) {
+    if (this.camera) this.camera.endDrag();
+  }
+
+  // ==================================================================
+  // MAIN LOOP
+  // ==================================================================
+  _loop(now) {
+    const dt = Math.min(0.1, (now - this._lastFrameTime) / 1000);
+    this._lastFrameTime = now;
+
+    try {
+      this._update(dt);
+    } catch (err) {
+      this._setStatus(`Update error (ignored): ${err.message}`, COLORS.danger);
+    }
+    try {
+      this._draw();
+    } catch (err) {
+      console.error("[render error]", err);
+    }
+    requestAnimationFrame((t) => this._loop(t));
+  }
+
+  _update(dt) {
+    if (this.state !== STATE_DASHBOARD) return;
+    if (this.mode === "real") this._pumpRealSerial();
+    else if (this.mode === "demo") this._pumpDemo(dt);
+  }
+
+  _draw() {
+    if (this.state !== STATE_DASHBOARD) return;
+    this._drawTopBar();
+    this._drawMap();
+    this._drawBottomPanel();
+    this._updateLeftPanelStatusFade();
+  }
+
+  _updateLeftPanelStatusFade() {
+    if (!this.statusMsgEl) return;
+    const elapsed = (performance.now() - this.statusMessageTime) / 1000;
+    if (elapsed > 6) this.statusMsgEl.style.opacity = "0";
+  }
+
+  _drawTopBar() {
+    const active = this.mode === "real" ? this.serialConnected : this.mode === "demo";
+    this.connPill.textContent = active ? "● CONNECTED" : "● DISCONNECTED";
+    this.connPill.className = "pill " + (active ? "pill-on" : "pill-off");
+
+    this.mapPill.textContent = this.mappingActive ? "MAPPING" : "IDLE";
+    this.mapPill.className = "pill " + (this.mappingActive ? "pill-on" : "pill-off");
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    this.clockEl.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+    this.modeLabelEl.textContent = this.mode === "real" ? "REAL SENSOR MODE" : "DEMO MODE";
+
+    // serial sub-status pill in the left panel too
+    if (this.serialStatusPill) {
+      const connectedNow = this.mode === "real" ? this.serialConnected : false;
+      this.serialStatusPill.textContent = connectedNow ? "● CONNECTED" : "● DISCONNECTED";
+      this.serialStatusPill.className = "status-pill " + (connectedNow ? "pill-on" : "pill-off");
+    }
+  }
+
+  _drawMap() {
+    const ctx = this.ctx;
+    const dpr = this._dpr || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const vp = this.camera.viewport;
+
+    ctx.fillStyle = COLORS.background;
+    ctx.fillRect(0, 0, vp.w, vp.h);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, vp.w, vp.h);
+    ctx.clip();
+
+    this._drawGrid(ctx);
+    this._drawAxes(ctx);
+    this._drawTrail(ctx);
+    this._drawObstacles(ctx);
+    this._drawRobotIcon(ctx);
+
+    ctx.restore();
+
+    this._drawScaleBar(ctx);
+    this._drawLegend(ctx);
+    if (this.mode === "demo") this._drawDemoBadge(ctx);
+
+    ctx.strokeStyle = COLORS.panelBorder;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, vp.w - 2, vp.h - 2);
+  }
+
+  _drawGrid(ctx) {
+    const cam = this.camera;
+    let spacing = CONFIG.GRID_SPACING_CM;
+    const ppc = cam.pixelsPerCm;
+    let pixelSpacing = spacing * ppc;
+    while (pixelSpacing < 18 && spacing < 5000) {
+      spacing *= 2;
+      pixelSpacing = spacing * ppc;
+    }
+    const vp = cam.viewport;
+    const [worldLeft, worldTop] = cam.screenToWorld(0, 0);
+    const [worldRight, worldBottom] = cam.screenToWorld(vp.w, vp.h);
+
+    const startX = Math.floor(worldLeft / spacing) * spacing;
+    const endX = Math.ceil(worldRight / spacing) * spacing;
+    const startY = Math.floor(worldBottom / spacing) * spacing;
+    const endY = Math.ceil(worldTop / spacing) * spacing;
+
+    ctx.lineWidth = 1;
+    for (let x = startX; x <= endX; x += spacing) {
+      const [sx] = cam.worldToScreen(x, 0);
+      const major = Math.abs(x % (spacing * 4)) < 1e-6;
+      ctx.strokeStyle = major ? COLORS.gridMajor : COLORS.grid;
+      ctx.beginPath();
+      ctx.moveTo(sx, 0);
+      ctx.lineTo(sx, vp.h);
+      ctx.stroke();
+    }
+    for (let y = startY; y <= endY; y += spacing) {
+      const [, sy] = cam.worldToScreen(0, y);
+      const major = Math.abs(y % (spacing * 4)) < 1e-6;
+      ctx.strokeStyle = major ? COLORS.gridMajor : COLORS.grid;
+      ctx.beginPath();
+      ctx.moveTo(0, sy);
+      ctx.lineTo(vp.w, sy);
+      ctx.stroke();
+    }
+  }
+
+  _drawAxes(ctx) {
+    const cam = this.camera;
+    const vp = cam.viewport;
+    const [ox, oy] = cam.worldToScreen(0, 0);
+    ctx.strokeStyle = COLORS.accentDim;
+    ctx.lineWidth = 1;
+    if (ox >= 0 && ox <= vp.w) {
+      ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, vp.h); ctx.stroke();
+    }
+    if (oy >= 0 && oy <= vp.h) {
+      ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(vp.w, oy); ctx.stroke();
+    }
+  }
+
+  _drawTrail(ctx) {
+    const trail = this.robot.trail;
+    if (trail.length < 2) return;
+    ctx.strokeStyle = COLORS.trail;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let first = true;
+    for (const [x, y] of trail) {
+      const [sx, sy] = this.camera.worldToScreen(x, y);
+      if (first) { ctx.moveTo(sx, sy); first = false; } else { ctx.lineTo(sx, sy); }
+    }
+    ctx.stroke();
+  }
+
+  _drawObstacles(ctx) {
+    ctx.fillStyle = COLORS.obstacle;
+    for (const [x, y] of this.mapData.points) {
+      const [sx, sy] = this.camera.worldToScreen(x, y);
+      ctx.beginPath();
+      ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  _drawRobotIcon(ctx) {
+    const [sx, sy] = this.camera.worldToScreen(this.robot.x, this.robot.y);
+    const ppcRatio = Math.min(this.camera.pixelsPerCm / CONFIG.DEFAULT_PIXELS_PER_CM, 3);
+    const size = Math.max(10, 9 * ppcRatio);
+    const rad = (this.robot.angle * Math.PI) / 180;
+
+    const tip = [sx + Math.cos(rad) * size * 1.6, sy - Math.sin(rad) * size * 1.6];
+    const left = [sx + Math.cos(rad + (140 * Math.PI) / 180) * size, sy - Math.sin(rad + (140 * Math.PI) / 180) * size];
+    const right = [sx + Math.cos(rad - (140 * Math.PI) / 180) * size, sy - Math.sin(rad - (140 * Math.PI) / 180) * size];
+
+    ctx.fillStyle = COLORS.accentSoft;
+    ctx.beginPath();
+    ctx.arc(sx, sy, size * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = COLORS.robot;
+    ctx.beginPath();
+    ctx.moveTo(...tip);
+    ctx.lineTo(...left);
+    ctx.lineTo(...right);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = COLORS.white;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  _drawScaleBar(ctx) {
+    const cam = this.camera;
+    const ppc = cam.pixelsPerCm;
+    const targetPx = 120;
+    let bestCm = CONFIG.SCALE_BAR_TARGETS_CM[0];
+    for (const cm of CONFIG.SCALE_BAR_TARGETS_CM) {
+      if (cm * ppc <= targetPx) bestCm = cm;
+    }
+    const barPx = bestCm * ppc;
+    const x0 = 16;
+    const y0 = cam.viewport.h - 22;
+
+    ctx.strokeStyle = COLORS.textDim;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + barPx, y0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0, y0 - 5); ctx.lineTo(x0, y0 + 5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0 + barPx, y0 - 5); ctx.lineTo(x0 + barPx, y0 + 5); ctx.stroke();
+
+    ctx.fillStyle = COLORS.textDim;
+    ctx.font = "12px 'Segoe UI', sans-serif";
+    ctx.fillText(`${bestCm} cm`, x0, y0 - 8);
+  }
+
+  _drawLegend(ctx) {
+    const vp = this.camera.viewport;
+    const lines = [
+      [COLORS.robot, "\u25B2  Robot"],
+      [COLORS.obstacle, "\u25CF  Obstacle"],
+      [COLORS.trail, "\u2014  Robot Path"],
+      [COLORS.gridMajor, "\u25A1  Grid"],
+    ];
+    const panelW = 150;
+    const panelH = 14 + lines.length * 20;
+    const x0 = vp.w - panelW - 8;
+    const y0 = 12;
+
+    ctx.fillStyle = "rgba(20,22,29,0.78)";
+    this._roundRect(ctx, x0, y0, panelW, panelH, 8);
+    ctx.fill();
+
+    ctx.font = "12px 'Segoe UI', sans-serif";
+    lines.forEach(([color, text], i) => {
+      ctx.fillStyle = COLORS.text;
+      ctx.fillText(text, x0 + 10, y0 + 18 + i * 20);
+    });
+  }
+
+  _drawDemoBadge(ctx) {
+    const vp = this.camera.viewport;
+    ctx.font = "bold 13px 'Segoe UI', sans-serif";
+    const text = "DEMO MODE";
+    const textW = ctx.measureText(text).width;
+    const padX = 10, padY = 6;
+    const w = textW + padX * 2;
+    const h = 13 + padY * 2;
+    const x = vp.w / 2 - w / 2;
+    const y = 10;
+    ctx.fillStyle = COLORS.warning;
+    this._roundRect(ctx, x, y, w, h, 6);
+    ctx.fill();
+    ctx.fillStyle = "#141414";
+    ctx.fillText(text, x + padX, y + h - padY - 2);
+  }
+
+  _roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  _drawBottomPanel() {
+    const distStr = this.lastDistance != null ? `${this.lastDistance.toFixed(1)} cm` : "-- cm";
+    const angleStr = this.lastAngle != null ? `${this.lastAngle.toFixed(1)} deg` : "-- deg";
+    this.sensorDataEl.innerHTML = [
+      `Distance: ${distStr}`,
+      `Angle: ${angleStr}`,
+      `Measurements: ${this.mapData.totalMeasurements}`,
+      `Mapped Points: ${this.mapData.points.length}`,
+    ].map((l) => `<div>${l}</div>`).join("");
+
+    this.robotPosEl.innerHTML = [
+      `X: ${this.robot.x.toFixed(1)} cm`,
+      `Y: ${this.robot.y.toFixed(1)} cm`,
+      `Angle: ${this.robot.angle.toFixed(1)} deg`,
+      `Session Time: ${this.robot.elapsedTimeStr()}`,
+    ].map((l) => `<div>${l}</div>`).join("");
+
+    let validPct = 0;
+    if (this.mapData.totalMeasurements > 0) {
+      validPct = (100 * this.mapData.validMeasurements) / this.mapData.totalMeasurements;
+    }
+    this.mapStatsEl.innerHTML = [
+      `Valid: ${this.mapData.validMeasurements} (${validPct.toFixed(0)}%)`,
+      `Rejected: ${this.mapData.rejectedMeasurements}`,
+      `Mapping Time: ${this.mapData.mappingTimeStr()}`,
+      `Map Size: ${this.mapData.mapSizeStr()}`,
+    ].map((l) => `<div>${l}</div>`).join("");
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  window.__app = new App(document);
+});
+
+</script>
+</body>
+</html>
